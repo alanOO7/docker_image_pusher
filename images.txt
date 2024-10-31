@@ -6,3 +6,4 @@ xhofe/alist:latest
 --platform=linux/arm64 xiaoyaliu/alist
 ghcr.io/open-webui/open-webui:main
 ollama/ollama:latest
+registry.cn-hangzhou.aliyuncs.com/infiniflow/ragflow:v0.13.0
