@@ -1,15 +1,10 @@
 nginx
 #支持私库
 k8s.gcr.io/kube-state-metrics/kube-state-metrics:v2.0.0
-xhofe/alist:latest
-#支持指定架构
-#--platform=linux/arm64 xiaoyaliu/alist
-#ghcr.io/open-webui/open-webui:main
 keking/kkfileview:4.1.0
 ollama/ollama:latest
 registry.cn-hangzhou.aliyuncs.com/infiniflow/ragflow:nightly-slim
-#mysql:8.0.39
-#quay.io/minio/minio:RELEASE.2023-12-20T01-00-02Z
 redis:7.2.4
 ghcr.io/open-webui/open-webui:cuda
 registry.cn-hangzhou.aliyuncs.com/xprobe_xinference/xinference:latest
+docker.n8n.io/n8nio/n8n
