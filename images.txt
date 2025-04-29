@@ -6,6 +6,5 @@ ollama/ollama:latest
 registry.cn-hangzhou.aliyuncs.com/infiniflow/ragflow:nightly-slim
 redis:7.2.4
 ghcr.io/open-webui/open-webui:cuda
-ghcr.io/open-webui/open-webui:main
 registry.cn-hangzhou.aliyuncs.com/xprobe_xinference/xinference:latest
 docker.n8n.io/n8nio/n8n
