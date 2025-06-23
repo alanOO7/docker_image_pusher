@@ -1,46 +1,36 @@
-name: Docker Image Pull and Push
+name: Docker Image Sync to Aliyun
 
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
   schedule:
-    - cron: '00 23 * * *'  # 每天23:00 UTC触发
+    - cron: '00 2 * * *'  # 每天凌晨2点UTC执行 [[4]]
 
 env:
-  ALIYUN_REGISTRY: "${{ secrets.ALIYUN_REGISTRY }}"          # 阿里云镜像仓库地址
-  ALIYUN_NAME_SPACE: "${{ secrets.ALIYUN_NAME_SPACE }}"      # 阿里云命名空间
-  ALIYUN_REGISTRY_USER: "${{ secrets.ALIYUN_REGISTRY_USER }}"# 阿里云账号
-  ALIYUN_REGISTRY_PASSWORD: "${{ secrets.ALIYUN_REGISTRY_PASSWORD }}" # 阿里云密码
-  DOCKER_HUB_USER: "${{ secrets.DOCKER_HUB_USER }}"          # Docker Hub账号
-  DOCKER_HUB_TOKEN: "${{ secrets.DOCKER_HUB_TOKEN }}"        # Docker Hub Token（推荐使用Personal Access Token）
+  ALIYUN_REGISTRY: "${{ secrets.ALIYUN_REGISTRY }}"
+  ALIYUN_NAME_SPACE: "${{ secrets.ALIYUN_NAME_SPACE }}"
+  ALIYUN_REGISTRY_USER: "${{ secrets.ALIYUN_REGISTRY_USER }}"
+  ALIYUN_REGISTRY_PASSWORD: "${{ secrets.ALIYUN_REGISTRY_PASSWORD }}"
+  DOCKER_HUB_USER: "${{ secrets.DOCKER_HUB_USER }}"        # Docker Hub账号 [[10]]
+  DOCKER_HUB_TOKEN: "${{ secrets.DOCKER_HUB_TOKEN }}"      # Docker Hub Token [[10]]
 
 jobs:
   build:
-    name: Pull and Push Docker Images
+    name: Pull and Push Images
     runs-on: ubuntu-latest
     steps:
-    # 1. 配置阿里云镜像加速器（降低Docker Hub请求压力）
-    - name: Configure Aliyun Registry Mirror
-      run: |
-        sudo mkdir -p /etc/docker
-        cat <<EOF | sudo tee /etc/docker/daemon.json
-        {
-          "registry-mirrors": ["https://<your-aliyun-mirror>.mirror.aliyuncs.com"] 
-        }
-        EOF
-        sudo systemctl daemon-reload
-        sudo systemctl restart docker
-      # 引用来源：https://help.aliyun.com/document_detail/40521.html  [[5]]
-
-    # 2. 登录Docker Hub和阿里云仓库（提升限流阈值）
-    - name: Docker Login
+    # 1. 登录Docker Hub（提升限流阈值） [[6]]
+    - name: Docker Hub Login
       run: |
         docker login --username=$DOCKER_HUB_USER --password=$DOCKER_HUB_TOKEN
-        docker login -u $ALIYUN_REGISTRY_USER -p $ALIYUN_REGISTRY_PASSWORD $ALIYUN_REGISTRY
-      # 引用来源：Docker Hub认证提升限流阈值 [[2]]
 
-    # 3. 磁盘空间优化（清理缓存+调整Docker存储路径）
+    # 2. 登录阿里云仓库 [[8]]
+    - name: Aliyun Registry Login
+      run: |
+        docker login -u $ALIYUN_REGISTRY_USER -p $ALIYUN_REGISTRY_PASSWORD $ALIYUN_REGISTRY
+
+    # 3. 磁盘空间优化（清理缓存+调整Docker存储路径） [[5]]
     - name: Maximize build space
       uses: easimon/maximize-build-space@master
       with:
@@ -49,7 +39,6 @@ jobs:
         remove-dotnet: 'true'
         remove-haskell: 'true'
         build-mount-path: '/var/lib/docker/'
-      # 引用来源：清理缓存和调整存储路径 [[3]]
 
     # 4. 重启Docker服务（确保配置生效）
     - name: Restart Docker
@@ -72,10 +61,10 @@ jobs:
     # 8. 主流程：拉取、打标签、推送镜像
     - name: Build and Push Images to Aliyun
       env:
-        MAX_RETRIES: 3
-        RETRY_DELAY: 10
+        MAX_RETRIES: 5
+        RETRY_DELAY: 30
       run: |
-        # 定义重试函数（应对限流和网络波动）
+        # 定义重试函数（应对限流和网络波动） [[6]]
         retry() {
           local retries=$1
           local delay=$2
@@ -87,7 +76,7 @@ jobs:
           exit 1
         }
 
-        # 处理镜像重复名称问题
+        # 处理镜像重复名称问题 [[2]]
         declare -A duplicate_images
         declare -A temp_map
         while IFS= read -r line || [ -n "$line" ]; do
@@ -134,7 +123,7 @@ jobs:
             
             new_image="$ALIYUN_REGISTRY/$ALIYUN_NAME_SPACE/$platform_prefix$name_space_prefix$image_name_tag"
             
-            # 带重试的镜像拉取
+            # 带重试的镜像拉取 [[6]]
             echo "Pulling $image..."
             retry $MAX_RETRIES $RETRY_DELAY docker pull $image
             
@@ -143,25 +132,24 @@ jobs:
             docker tag $image $new_image
             
             echo "Pushing $new_image..."
-            docker push $new_image
+            retry $MAX_RETRIES $RETRY_DELAY docker push $new_image
             
-            # 即时清理磁盘空间
+            # 即时清理磁盘空间 [[5]]
             echo "Cleaning up $image and $new_image"
             docker rmi $image || true
             docker rmi $new_image || true
             
-            # 每处理5个镜像执行系统清理
+            # 每处理3个镜像执行系统清理
             ((count++))
-            if (( count % 5 == 0 )); then
+            if (( count % 3 == 0 )); then
                 docker system prune -af
             fi
         done < images.txt
 
-    # 9. 最终系统清理
+    # 9. 最终系统清理 [[5]]
     - name: Final Cleanup
       run: |
         echo "Final cleanup..."
         docker system prune -af
         sudo apt-get clean
         sudo rm -rf /tmp/* ~/.cache/*
-      # 引用来源：定期清理磁盘空间 [[3]]
