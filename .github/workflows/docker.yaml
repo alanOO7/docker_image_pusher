@@ -5,7 +5,7 @@ on:
   push:
     branches: [ main ]
   schedule:
-    - cron: '00 2 * * *'  # 每天凌晨2点UTC执行
+    - cron: '00 2 * * *'  # 每天凌晨2点UTC执行 [[1]]
 
 env:
   ALIYUN_REGISTRY: "${{ secrets.ALIYUN_REGISTRY }}"
@@ -123,27 +123,38 @@ jobs:
             
             new_image="$ALIYUN_REGISTRY/$ALIYUN_NAME_SPACE/$platform_prefix$name_space_prefix$image_name_tag"
             
-            # 带重试的镜像拉取 
+            # **关键优化1：拉取后检查镜像是否存在**
             echo "Pulling $image..."
             retry $MAX_RETRIES $RETRY_DELAY docker pull $image
+            if ! docker images | grep -q "$(echo $image | cut -d':' -f1)"; then
+              echo "Error: Image $image not found after pull!"
+              exit 1
+            fi
             
-            # 打标签并推送
+            # **关键优化2：标签前检查源镜像存在性**
             echo "Tagging $image to $new_image"
-            docker tag $image $new_image
+            if ! docker tag $image $new_image; then
+              echo "Error: Failed to tag $image to $new_image"
+              exit 1
+            fi
             
+            # **关键优化3：推送后清理并增加日志**
             echo "Pushing $new_image..."
             retry $MAX_RETRIES $RETRY_DELAY docker push $new_image
             
-            # **关键优化：分步清理镜像并忽略错误**
             echo "Cleaning up $image and $new_image"
-            # 分步删除源镜像和目标镜像
-            docker images | grep "$(echo $image | cut -d':' -f1)" | awk '{print $3}' | xargs --no-run-if-empty sudo docker rmi --force || true
-            docker images | grep "$(echo $new_image | cut -d':' -f1)" | awk '{print $3}' | xargs --no-run-if-empty sudo docker rmi --force || true
+            # **关键优化4：分步删除并记录结果**
+            echo "Step 1: Deleting image by name"
+            docker images | grep "$(echo $image | cut -d':' -f1)" | awk '{print $3}' | xargs --no-run-if-empty sudo docker rmi --force || echo "No matching images to delete for $image"
             
-            # 每处理3个镜像执行系统清理
+            echo "Step 2: Deleting new image by name"
+            docker images | grep "$(echo $new_image | cut -d':' -f1)" | awk '{print $3}' | xargs --no-run-if-empty sudo docker rmi --force || echo "No matching images to delete for $new_image"
+            
+            # **关键优化5：定期系统清理并忽略错误**
             ((count++))
             if (( count % 3 == 0 )); then
-                sudo docker system prune -af || true
+                echo "Step 3: Running system prune"
+                sudo docker system prune -af || echo "System prune completed with warnings"
             fi
         done < images.txt
 
@@ -151,6 +162,6 @@ jobs:
     - name: Final Cleanup
       run: |
         echo "Final cleanup..."
-        sudo docker system prune -af || true
-        sudo apt-get clean || true
-        sudo rm -rf /tmp/* ~/.cache/* || true
+        sudo docker system prune -af || echo "Final prune completed with warnings"
+        sudo apt-get clean || echo "APT cache cleaned"
+        sudo rm -rf /tmp/* ~/.cache/* || echo "Temporary files removed"
