@@ -26,7 +26,7 @@ jobs:
         sudo mkdir -p /etc/docker
         cat <<EOF | sudo tee /etc/docker/daemon.json
         {
-          "registry-mirrors": ["https://<your-aliyun-mirror>.mirror.aliyuncs.com"] 
+          "registry-mirrors": ["crpi-4bz3hxx8mldn81u5.cn-guangzhou.personal.cr.aliyuncs.com"] 
         }
         EOF
         sudo systemctl daemon-reload
