@@ -20,10 +20,13 @@ jobs:
     name: Pull and Push Images
     runs-on: ubuntu-latest
     steps:
-    # 1. 登录Docker Hub（提升限流阈值） 
+    # 1. 使用官方 Action 登录 Docker Hub（提升限流阈值） 
     - name: Docker Hub Login
-      run: |
-        docker login --username=$DOCKER_HUB_USER --password=$DOCKER_HUB_TOKEN
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_HUB_USER }}
+        password: ${{ secrets.DOCKER_HUB_TOKEN }}
+      # 引用来源：GitHub 官方推荐的 Docker 登录方式 [[5]]
 
     # 2. 登录阿里云仓库 
     - name: Aliyun Registry Login
