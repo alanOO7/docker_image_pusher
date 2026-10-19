@@ -2,3 +2,16 @@ ghcr.io/open-webui/open-webui:cuda
 xprobe/xinference:latest
 docker.n8n.io/n8nio/n8n
 vllm/vllm-openai
+
+# 天枢后端和前端
+ghcr.io/magicyuan876/tianshu-backend:2.2.1
+ghcr.io/magicyuan876/tianshu-frontend:2.2.1
+
+# 对象存储
+rustfs/rustfs:1.0.1
+
+# Redis 队列（不启用可删除）
+redis:7-alpine
+
+# 本地 vLLM 服务（不使用可删除）
+vllm/vllm-openai:v0.31.0
